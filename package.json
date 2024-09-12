@@ -1,5 +1,5 @@
 {
-	"name": "websocket-client",
+	"name": "@chust3r/websocket-client",
 	"version": "1.0.0",
 	"description": "",
 	"main": "dist/index.js",
@@ -9,7 +9,26 @@
 		"build": "tsc",
 		"prepublishOnly": "npm run build"
 	},
-	"keywords": [],
+	"keywords": [
+		"WebSocket",
+		"Native WebSocket API",
+		"Real-time communication",
+		"Message compression",
+		"pako",
+		"Event handling",
+		"Connection management",
+		"Cross-browser compatibility",
+		"Asynchronous messaging",
+		"Low-latency communication",
+		"WebSocket connection",
+		"Message queuing",
+		"Reconnection strategy",
+		"JSON serialization",
+		"WebSocket events",
+		"Data framing",
+		"Network efficiency",
+		"Compressed messages"
+	],
 	"author": "Chust3r",
 	"license": "ISC",
 	"devDependencies": {
