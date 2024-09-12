@@ -424,10 +424,9 @@ export class WebSocketClient {
 	}
 
 	/**
-	 * Registra un manejador que se ejecutará para cualquier evento.
+	 * Registers an event listener for any event.
 	 *
-	 * @param {function} handler - La función que se ejecutará cuando ocurra un evento.
-	 * Recibe un objeto `IncommingMessage` como argumento.
+	 * @param {function} handler - The function to be called when any event is emitted.
 	 */
 	public onAny(handler: (data: IncommingMessage) => void): void {
 		let eventName = '*'
