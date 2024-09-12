@@ -25,7 +25,6 @@ interface EventMap {
 	connect: (data: Event) => void
 	disconnect: (data: CloseEvent) => void
 	error: (data: Error) => void
-	message: (data: MessageEvent) => void
 	reconnect_attempt: (data: number) => void
 	reconnect_failed: (data: number) => void
 }
