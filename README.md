@@ -174,8 +174,8 @@ ws.once('connect', () => {
 This method is used to register an event listener that will be triggered for all events except events in the EventMap interface as `connect`, `disconnect`,`reconnect_attempt`, `reconnect_failed`,and `error`.
 
 ```ts
-ws.onAny((event, data) => {
-	console.log(event, data)
+ws.onAny((data) => {
+	console.log(data.event)
 })
 ```
 
