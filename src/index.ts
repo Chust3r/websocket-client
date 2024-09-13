@@ -30,6 +30,22 @@ interface EventMap {
 }
 
 /**
+ * @interface
+ *
+ * Represents standard message for incoming and outgoing WebSocket messages.
+ *
+ * @property {string} timestamp - The timestamp of when the message was received, formatted as an ISO 8601 string.
+ * @property {string} event - The event type associated with the message.
+ * @property {any} [data] - The data payload of the message, which can be of any type. This property is optional.
+ */
+
+interface IMessage {
+	timestamp: string
+	event: string
+	data?: any
+}
+
+/**
  * @enum {string}
  * @readonly
  * Represents the connection status of the WebSocket client.
@@ -60,22 +76,6 @@ interface Options {
 	reconnectInterval?: number
 	reconnectAttempts?: number
 	useCompression: boolean
-}
-
-/**
- * @interface
- *
- * Represents an incoming message from the WebSocket server.
- *
- * @property {string} timestamp - The timestamp of when the message was received, formatted as an ISO 8601 string.
- * @property {string} event - The event type associated with the message.
- * @property {any} [data] - The data payload of the message, which can be of any type. This property is optional.
- */
-
-interface IncommingMessage {
-	timestamp: string
-	event: string
-	data?: any
 }
 
 /**
@@ -146,6 +146,14 @@ export class WebSocketClient {
 	}
 
 	/**
+	 * If true, the client will attempt to reconnect to the server if the connection is lost.
+	 * @type {boolean}
+	 * @default false
+	 */
+
+	private shouldReconnect: boolean = true
+
+	/**
 	 * The compressor used for message compression.
 	 * @type {ICompressor}
 	 * @private
@@ -157,11 +165,11 @@ export class WebSocketClient {
 
 	/**
 	 * A queue for incoming messages that are waiting to be sent.
-	 * @type {IncommingMessage[]}
+	 * @type {IMessage[]}
 	 * @default []
 	 */
 
-	private eventQueue: IncommingMessage[] = []
+	private eventQueue: IMessage[] = []
 
 	/**
 	 * A map of event listeners for various events.
@@ -178,6 +186,17 @@ export class WebSocketClient {
 	 */
 
 	private reconnectAttempts: number = 0
+
+	/**
+	 *
+	 * A set with the subscriptions that the client is currently subscribed to.
+	 *
+	 * @type {Set<string>}
+	 *
+	 * @default new Set()
+	 */
+
+	private subscriptions: Set<string> = new Set()
 
 	/**
 	 * Creates an instance of the class and initializes the WebSocket connection.
@@ -294,7 +313,7 @@ export class WebSocketClient {
 				this.isConnected = false
 				this.status = ConnectionStatus.DISCONNECTED
 				this.trigger('disconnect', event)
-				if (this.options.reconnect) {
+				if (this.options.reconnect && this.shouldReconnect) {
 					this.reconnect()
 				}
 			})
@@ -328,9 +347,7 @@ export class WebSocketClient {
 						messageData = data
 					}
 
-					const parsedMessageData = JSON.parse(
-						messageData
-					) as IncommingMessage
+					const parsedMessageData = JSON.parse(messageData) as IMessage
 					this.trigger('*', parsedMessageData)
 					this.trigger(parsedMessageData.event, parsedMessageData)
 				} catch (e) {
@@ -360,7 +377,10 @@ export class WebSocketClient {
 	 */
 
 	private reconnect(): void {
-		if (this.status === ConnectionStatus.DISCONNECTED) {
+		if (
+			this.status === ConnectionStatus.DISCONNECTED &&
+			this.options.reconnect
+		) {
 			if (this.reconnectAttempts < (this.options.reconnectAttempts || 5)) {
 				this.reconnectAttempts++
 				this.status = ConnectionStatus.RECONNECTING
@@ -405,8 +425,8 @@ export class WebSocketClient {
 	 *                                It receives parameters based on the event type defined in EventMap.
 	 *
 	 * @param {string} eventName - A string representing the name of the event to listen to.
-	 * @param {(args: IncommingMessage) => void} handler - A function that takes an
-	 *                                                       `IncommingMessage` as an argument.
+	 * @param {(args: IMessage) => void} handler - A function that takes an
+	 *                                                       `IMessage` as an argument.
 	 *
 	 * @param {string} eventName - A string representing the name of the event to listen to.
 	 * @param {...any[]} handler - A function that takes any number of arguments.
@@ -415,7 +435,7 @@ export class WebSocketClient {
 	 */
 
 	public on<K extends keyof EventMap>(eventName: K, handler: EventMap[K]): void
-	public on(eventName: string, handler: (args: IncommingMessage) => void): void
+	public on(eventName: string, handler: (args: IMessage) => void): void
 	public on(eventName: string, handler: (...args: any[]) => void) {
 		if (!this.eventListeners[eventName]) {
 			this.eventListeners[eventName] = []
@@ -428,7 +448,7 @@ export class WebSocketClient {
 	 *
 	 * @param {function} handler - The function to be called when any event is emitted.
 	 */
-	public onAny(handler: (data: IncommingMessage) => void): void {
+	public onAny(handler: (data: IMessage) => void): void {
 		let eventName = '*'
 		if (!this.eventListeners[eventName]) {
 			this.eventListeners[eventName] = []
@@ -451,15 +471,12 @@ export class WebSocketClient {
 	 * @throws {Error} If there is an error during message sending.
 	 */
 
-	public emit(
-		eventName: string,
-		data: IncommingMessage['data']
-	): Promise<void> {
-		let m: IncommingMessage = {
+	public emit(eventName: string, data: IMessage['data']): Promise<void> {
+		let m: IMessage = {
 			timestamp: new Date().toISOString(),
 			event: eventName,
 			data,
-		} as IncommingMessage
+		} as IMessage
 
 		if (!this.isConnected) {
 			this.eventQueue.push(m)
@@ -506,6 +523,7 @@ export class WebSocketClient {
 
 	public disconnect() {
 		this.isConnected = false
+		this.shouldReconnect = false
 		this.status = ConnectionStatus.DISCONNECTED
 		this.ws.close()
 	}
@@ -565,5 +583,89 @@ export class WebSocketClient {
 	 */
 	public getStatus(): ConnectionStatus {
 		return this.status
+	}
+
+	/**
+	 * Subscribes the client to a specific topic.
+	 *
+	 * This method allows the client to receive messages sent to a
+	 * particular topic. If the client is already subscribed to that
+	 * topic, a warning will be displayed in the console.
+	 *
+	 * @param {string} topic - The name of the topic to subscribe to.
+	 *
+	 * @example
+	 * // Subscribe to a topic
+	 * ws.sub('chat/messages');
+	 */
+	public sub(topic: string) {
+		if (this.subscriptions.has(topic)) {
+			console.warn(`Subscription already exists: ${topic}`)
+			return
+		}
+		this.emit('subscribe', { topic })
+		this.subscriptions.add(topic)
+	}
+
+	/**
+	 * Unsubscribes the client from a specific topic.
+	 *
+	 * This method allows the client to stop receiving messages from a
+	 * particular topic. If the client is not subscribed to that topic,
+	 * a warning will be displayed in the console.
+	 *
+	 * @param {string} topic - The name of the topic to unsubscribe from.
+	 *
+	 * @example
+	 * // Unsubscribe from a topic
+	 * ws.unsub('chat/messages');
+	 */
+	public unsub(topic: string) {
+		if (!this.subscriptions.has(topic)) {
+			console.warn(`Subscription not found: ${topic}`)
+			return
+		}
+		this.subscriptions.delete(topic)
+		this.emit('unsubscribe', { topic })
+	}
+
+	/**
+	 * Publishes a message to a specific topic.
+	 *
+	 * This method sends a message to all clients subscribed to a
+	 * particular topic. If there are no subscribers for the topic,
+	 * a warning will be displayed in the console.
+	 *
+	 * @param {string} topic - The name of the topic to publish the message to.
+	 * @param {IMessage['data']} data - The data of the message to be sent.
+	 *
+	 * @example
+	 * // Publish a message to a topic
+	 * ws.pub('chat/messages', { text: 'Hello, world!' });
+	 */
+	public pub(topic: string, data: IMessage['data']) {
+		if (!this.subscriptions.has(topic)) {
+			console.warn(`You are not subscribed: ${topic}`)
+			return
+		}
+		this.emit('publish', { topic, data })
+	}
+
+	/**
+	 * Returns the current list of subscriptions.
+	 *
+	 * This method retrieves all the topics that the client is currently
+	 * subscribed to. It returns an array of topic names.
+	 *
+	 * @returns {string[]} An array of active subscription topics.
+	 *
+	 * @example
+	 * // Get the current subscriptions
+	 * const currentSubscriptions = ws.getSubscriptions();
+	 * console.log(currentSubscriptions);
+	 */
+
+	public getCurrentSubscriptions(): string[] {
+		return Array.from(this.subscriptions)
 	}
 }
