@@ -88,14 +88,31 @@ An optional configuration object for the WebSocket connection. It can include:
 -  **`useCompression`**: `boolean`  
    Whether to use compression for the messages sent over the WebSocket connection.
 
+-  **`compressor`**: `ICompressor` (optional) You can provide a custom compressor implementation to use for compressing and decompressing messages. By default, it uses a `pako` implementation.
+
+-  **`heartbeat`**: `boolean` (default: `false`) Provides the ability to enable heartbeat mechanism for detecting connection status, use events `ping` and `pong`, if the event `pong` is received, the connection is considered as alive.
+
+-  **`heartbeatInterval`**: `number` (default: `10000`) The interval (in milliseconds) for sending heartbeat messages.
+
+## Compressor
+
+The `compressor` option allows you to provide a custom compressor implementation to use for compressing and decompressing messages. By default, it uses a `pako` implementation.
+
+```ts
+interface ICompressor {
+	compress(data: string): Uint8Array
+	decompress(data: Uint8Array): string
+}
+```
+
 ## Message Structure
 
-### `IncommingMessage`
+### `IMessage`
 
 The structure used for managing incoming and outgoing messages is defined as follows:
 
 ```ts
-interface IncommingMessage {
+interface IMessage {
 	timestamp: string //→ Timestamp in formatted ISO 8601 string
 	event: string //→ Used to identify the type of event
 	data?: any //→ The data payload of the message
@@ -195,6 +212,83 @@ ws.on('connect', () => {
 ```
 
 If the client is not connected, the message is queued for later transmission. Otherwise, it is sent immediately.
+
+### Subscribe to events with `sub`
+
+The `sub` method is used to join a specific channel or room on the WebSocket server. Internally, this method sends a common message with a specific event type called sub, along with a payload that includes the topic (or channel) the client wishes to subscribe to.
+
+```ts
+ws.sub('chat/messages')
+```
+
+#### Internal mechanics
+
+When the subscribe method is called, the client sends a message to the server indicating the desired subscription:
+
+-  **`event Type`**: `sub`
+-  **`payload`**: Contains the topic (or channel) the client wishes to subscribe to.
+
+The server manages the subscription logic, ensuring the client is correctly added to the specified channel and is set up to receive messages directed at that channel.
+
+#### Listening for messages
+
+To listen for messages emitted to the subscribed channel, the client uses the on method. This method allows the client to define a callback that is triggered whenever a message of the specified type is received.
+
+#### Event filtering
+
+The `on` method can be used to listen for events based on their type, which means that if the client subscribes to a channel where an event (e.g., hello) is emitted, it will be able to capture that event using the same `on` method. The messages are filtered by their event type, allowing for organized handling of events.
+
+### Unsubscribe from events with `unsub`
+
+The `unsub` method is used to unsubscribe from a specific topic on the WebSocket server. This method removes the client’s subscription to the given topic, preventing it from receiving any further messages associated with that topic.
+
+```ts
+ws.unsub('chat/messages')
+```
+
+#### Internal mechanics
+
+1. Check for the existence of the topic in the client's subscriptions.
+
+   -  The method first checks if the client is currently subscribed to the specified topic by verifying its presence in the subscriptions collection.
+
+   -  If the topic is not found, a warning is logged to the console indicating that the subscription does not exist.
+
+2. Remove the topic from the client's subscriptions.
+
+   -  The method removes the topic from the client's subscriptions by removing it from the subscriptions collection.
+
+3. Send a message to the server indicating that the client is no longer subscribed to the topic.
+
+   -  The method sends a message to the server indicating that the client is no longer subscribed to the specified topic.
+
+### Publish messages with `pub`
+
+The `pub` method is used to publish messages to a specific topic on the WebSocket server. This method allows the client to send data to all subscribers of the specified topic, enabling real-time communication and updates.
+
+```ts
+ws.pub('chat/messages', 'Hello, world!')
+```
+
+#### Internal mechanics
+
+1. Check if the topic exists in the client's subscriptions.
+
+   -  The method first checks if the client is currently subscribed to the specified topic by verifying its presence in the subscriptions collection.
+
+   -  If the topic is not found, a warning is logged to the console indicating that the subscription does not exist.
+
+2. Send a message to the server indicating that the client is subscribed to the topic.
+
+   -  If the subscription exists, the method emits a `pub` event, passing an object that includes both the topic and the data. This action informs the server and other components that a message is being published to the specified topic
+
+### Get all subscriptions with `getSubscriptions`
+
+This method is used to get all subscriptions.
+
+```ts
+ws.getSubscriptions()
+```
 
 ### Close the WebSocket connection with `disconnect`
 
