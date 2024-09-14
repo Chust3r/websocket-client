@@ -1,5 +1,6 @@
 import type { ICompressor } from './compressor'
 import { PakoCompressor } from './compressor'
+import { stringifyUrl } from './query'
 
 /**
  * @interface
@@ -76,6 +77,8 @@ enum ConnectionStatus {
  *                                   connection status. Defaults to false.
  * @property {number} [heartbeatInterval] - The interval (in milliseconds) for sending heartbeat
  *                                           messages. Defaults to 5000.
+ * @property {Record<string, string | number | boolean>} [query] - An optional object containing query parameters to be
+ *                                            appended to the URL of the WebSocket server.
  */
 interface Options {
 	reconnect?: boolean
@@ -85,6 +88,7 @@ interface Options {
 	compressor?: ICompressor
 	heartbeat?: boolean
 	heartbeatInterval?: number
+	query?: Record<string, string>
 }
 
 /**
@@ -154,6 +158,7 @@ export class WebSocketClient {
 		useCompression: false,
 		heartbeat: false,
 		heartbeatInterval: 10000,
+		query: {},
 	}
 
 	/**
@@ -243,8 +248,9 @@ export class WebSocketClient {
 	 */
 
 	constructor(url: string, options?: Options) {
-		this.url = url
 		this.options = { ...this.options, ...options }
+
+		this.url = stringifyUrl(url, this.options.query!)
 
 		if (this.options.useCompression) {
 			this.compressor = this.compressor || new PakoCompressor()

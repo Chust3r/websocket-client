@@ -94,6 +94,8 @@ An optional configuration object for the WebSocket connection. It can include:
 
 -  **`heartbeatInterval`**: `number` (default: `10000`) The interval (in milliseconds) for sending heartbeat messages.
 
+-  **`query`**: `Record<string, string | number | boolean>` (optional) Query string to send with the WebSocket connection. This can be used to pass additional parameters or other information to the server.
+
 ## Compressor
 
 The `compressor` option allows you to provide a custom compressor implementation to use for compressing and decompressing messages. By default, it uses a `pako` implementation.
