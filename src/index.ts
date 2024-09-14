@@ -58,7 +58,7 @@ enum ConnectionStatus {
 }
 
 /**
- * @interface
+ * @interface Options
  *
  * Represents the configuration options for the WebSocket client.
  *
@@ -68,14 +68,21 @@ enum ConnectionStatus {
  *                                           to reconnect after a disconnection. Defaults to 1000.
  * @property {number} [reconnectAttempts] - The maximum number of reconnection attempts before giving up.
  *                                           Defaults to 5.
- * @property {boolean} useCompression - Whether to use compression or not.
+ * @property {boolean} useCompression - Whether to use compression for messages sent over the WebSocket.
+ * @property {ICompressor} [compressor] - An optional custom compressor implementation to use for
+ *                                          compressing and decompressing messages. By default, it uses
+ *                                          a `pako` implementation.
+ * @property {boolean} [heartbeat] - Indicates whether to enable heartbeat mechanism for detecting
+ *                                   connection status. Defaults to false.
+ * @property {number} [heartbeatInterval] - The interval (in milliseconds) for sending heartbeat
+ *                                           messages. Defaults to 5000.
  */
-
 interface Options {
 	reconnect?: boolean
 	reconnectInterval?: number
 	reconnectAttempts?: number
 	useCompression?: boolean
+	compressor?: ICompressor
 	heartbeat?: boolean
 	heartbeatInterval?: number
 }
@@ -240,7 +247,7 @@ export class WebSocketClient {
 		this.options = { ...this.options, ...options }
 
 		if (this.options.useCompression) {
-			this.compressor = new PakoCompressor()
+			this.compressor = this.compressor || new PakoCompressor()
 		}
 
 		this.setup()
