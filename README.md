@@ -27,7 +27,7 @@ This project provides a WebSocket client for managing WebSocket connections, han
 To install and use the WebSocket client in your project, run the following command:
 
 ```bash
-npm install @chust3r/websocket-client
+npm install websocket-client
 ```
 
 ## Usage
@@ -35,7 +35,7 @@ npm install @chust3r/websocket-client
 To use the WebSocketClient in your application, import it and create an instance by providing the WebSocket server URL and optional configuration options.
 
 ```ts
-import { WebSocketClient } from '@chust3r/websocket-client'
+import { WebSocketClient } from 'websocket-client'
 
 const ws = new WebSocketClient('ws://example.com')
 
