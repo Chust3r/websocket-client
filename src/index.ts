@@ -153,7 +153,7 @@ export class WebSocketClient {
 		reconnectInterval: 1000,
 		useCompression: false,
 		heartbeat: false,
-		heartbeatInterval: 5000,
+		heartbeatInterval: 10000,
 	}
 
 	/**
