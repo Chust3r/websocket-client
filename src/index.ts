@@ -75,7 +75,9 @@ interface Options {
 	reconnect?: boolean
 	reconnectInterval?: number
 	reconnectAttempts?: number
-	useCompression: boolean
+	useCompression?: boolean
+	heartbeat?: boolean
+	heartbeatInterval?: number
 }
 
 /**
@@ -143,6 +145,8 @@ export class WebSocketClient {
 		reconnectAttempts: 5,
 		reconnectInterval: 1000,
 		useCompression: false,
+		heartbeat: false,
+		heartbeatInterval: 5000,
 	}
 
 	/**
@@ -197,6 +201,26 @@ export class WebSocketClient {
 	 */
 
 	private subscriptions: Set<string> = new Set()
+
+	/**
+	 * Stores the timeout ID for the heartbeat interval, allowing it to be cleared later.
+	 * This is used to periodically send heartbeat pings to the server.
+	 *
+	 * @type {NodeJS.Timeout}
+	 */
+	private heartbeatTimeout!: NodeJS.Timeout
+
+	/**
+	 * Tracks whether a 'pong' (heartbeat response) has been received from the server.
+	 *
+	 * - `true`: A pong response has been received.
+	 * - `false`: No pong has been received yet after the last ping.
+	 *
+	 * This is reset to `false` after each ping and is set to `true` when a pong is received.
+	 *
+	 * @type {boolean}
+	 */
+	private heartbeatRecived: boolean = false
 
 	/**
 	 * Creates an instance of the class and initializes the WebSocket connection.
@@ -307,6 +331,9 @@ export class WebSocketClient {
 				this.reconnectAttempts = 0
 				this.trigger('connect', event)
 				this.flushQueue()
+				if (this.options.heartbeat) {
+					this.startHeartbeat()
+				}
 			})
 
 			websocket.addEventListener('close', (event) => {
@@ -315,6 +342,9 @@ export class WebSocketClient {
 				this.trigger('disconnect', event)
 				if (this.options.reconnect && this.shouldReconnect) {
 					this.reconnect()
+				}
+				if (this.options.heartbeat) {
+					this.stopHeartbeat()
 				}
 			})
 
@@ -337,20 +367,29 @@ export class WebSocketClient {
 							}
 						)
 
-						messageData =
-							this.options.useCompression && this.compressor
-								? this.compressor.decompress(
-										new Uint8Array(arrayBuffer)
-								  )
-								: new TextDecoder().decode(arrayBuffer)
+						if (this.options.useCompression && this.compressor) {
+							messageData = this.compressor.decompress(
+								new Uint8Array(arrayBuffer)
+							)
+						} else {
+							messageData = new TextDecoder().decode(arrayBuffer)
+						}
 					} else {
 						messageData = data
 					}
 
 					const parsedMessageData = JSON.parse(messageData) as IMessage
+
+					if (this.options.heartbeat) {
+						if (parsedMessageData.event === 'pong') {
+							this.heartbeatRecived = true
+						}
+					}
+
 					this.trigger('*', parsedMessageData)
 					this.trigger(parsedMessageData.event, parsedMessageData)
 				} catch (e) {
+					console.error('Failed to parse WebSocket message:', data, e)
 					this.trigger('error', {
 						message: 'Failed to parse message',
 						error: e,
@@ -381,7 +420,7 @@ export class WebSocketClient {
 			this.status === ConnectionStatus.DISCONNECTED &&
 			this.options.reconnect
 		) {
-			if (this.reconnectAttempts < (this.options.reconnectAttempts || 5)) {
+			if (this.reconnectAttempts < this.options.reconnectAttempts!) {
 				this.reconnectAttempts++
 				this.status = ConnectionStatus.RECONNECTING
 				this.trigger('reconnect_attempt', this.reconnectAttempts)
@@ -667,5 +706,44 @@ export class WebSocketClient {
 
 	public getCurrentSubscriptions(): string[] {
 		return Array.from(this.subscriptions)
+	}
+
+	/**
+	 * Starts the heartbeat mechanism to monitor the WebSocket connection.
+	 * It sends a 'ping' (via the 'heartbeat' event) to the server at regular intervals.
+	 * If a 'pong' (i.e., a response from the server) is not received within the expected time,
+	 * the WebSocket connection is closed.
+	 *
+	 * - Emits the 'heartbeat' event when the WebSocket connection is open.
+	 * - Resets the `heartbeatRecived` flag to `false` after each ping.
+	 * - If no pong is received within the interval + 1 second, the connection is closed.
+	 */
+	private startHeartbeat(): void {
+		const heartbeat = () => {
+			if (this.ws.readyState === WebSocket.OPEN) {
+				this.emit('ping', undefined)
+				this.heartbeatRecived = false
+
+				setTimeout(() => {
+					if (!this.heartbeatRecived) {
+						this.ws.close()
+						this.stopHeartbeat()
+					}
+				}, this.options.heartbeatInterval! + 1000)
+			}
+		}
+
+		this.heartbeatTimeout = setInterval(
+			heartbeat,
+			this.options.heartbeatInterval
+		)
+	}
+
+	/**
+	 * Stops the heartbeat mechanism.
+	 * Clears the timeout for the heartbeat interval to stop sending pings.
+	 */
+	private stopHeartbeat(): void {
+		clearInterval(this.heartbeatTimeout)
 	}
 }
