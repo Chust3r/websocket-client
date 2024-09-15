@@ -1,6 +1,6 @@
 import type { ICompressor } from './compressor'
 import { PakoCompressor } from './compressor'
-import { stringifyUrl } from './query'
+import qs from 'query-string'
 
 /**
  * @interface
@@ -250,7 +250,7 @@ export class WebSocketClient {
 	constructor(url: string, options?: Options) {
 		this.options = { ...this.options, ...options }
 
-		this.url = stringifyUrl(url, this.options.query!)
+		this.url = qs.stringifyUrl({ url, query: this.options.query })
 
 		if (this.options.useCompression) {
 			this.compressor = this.compressor || new PakoCompressor()
